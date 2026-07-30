@@ -26,6 +26,15 @@ const baseWaveStatements = BASE_WAVES.map(
   }`,
 ).join('\n')
 
+const sampleBaseWavesFunction = `
+vec3 sampleBaseWaves(vec2 worldXZ) {
+  float height = 0.0;
+  vec2 gradient = vec2(0.0);
+  ${baseWaveStatements}
+  return vec3(height, gradient);
+}
+`
+
 const oceanVertexShader = `
 uniform sampler2D uDynamicWater;
 uniform vec2 uDynamicTexel;
@@ -37,15 +46,11 @@ varying vec3 vWorldNormal;
 varying vec4 vDynamic;
 varying float vWaveHeight;
 
-vec3 sampleBaseWaves(vec2 worldXZ) {
-  float height = 0.0;
-  vec2 gradient = vec2(0.0);
-  ${baseWaveStatements}
-  return vec3(height, gradient);
-}
+${sampleBaseWavesFunction}
 
 void main() {
-  vec2 worldXZ = vec2(position.x, -position.y);
+  vec4 flatWorldPosition = modelMatrix * vec4(position, 1.0);
+  vec2 worldXZ = flatWorldPosition.xz;
   vec2 simulationUv = vec2(
     worldXZ.x / uWorldSize + 0.5,
     0.5 - worldXZ.y / uWorldSize
@@ -73,28 +78,62 @@ void main() {
     -0.95,
     0.95
   );
+  float edgeDistance = max(abs(worldXZ.x), abs(worldXZ.y));
+  float dynamicBlend = 1.0 - smoothstep(
+    uWorldSize * 0.42,
+    uWorldSize * 0.495,
+    edgeDistance
+  );
+  smoothDynamicHeight *= dynamicBlend;
 
   vec3 baseWave = sampleBaseWaves(worldXZ);
   vec2 dynamicGradient = vec2(
     dynamicRight - dynamicLeft,
     dynamicBottom - dynamicTop
   ) / (2.0 * uWorldSize * uDynamicTexel.x);
-  dynamicGradient = clamp(dynamicGradient, vec2(-0.28), vec2(0.28));
+  dynamicGradient =
+    clamp(dynamicGradient, vec2(-0.28), vec2(0.28)) *
+    dynamicBlend;
   vec2 totalGradient = baseWave.yz + dynamicGradient;
 
-  vec3 displacedPosition = position;
-  displacedPosition.z += baseWave.x + smoothDynamicHeight;
-  vec3 localNormal = normalize(vec3(
-    -totalGradient.x,
-    totalGradient.y,
-    1.0
-  ));
-
-  vec4 worldPosition = modelMatrix * vec4(displacedPosition, 1.0);
+  vec4 worldPosition = flatWorldPosition;
+  worldPosition.y += baseWave.x + smoothDynamicHeight;
   vWorldPosition = worldPosition.xyz;
-  vWorldNormal = normalize(mat3(modelMatrix) * localNormal);
-  vDynamic = vec4(smoothDynamicHeight, dynamicState.gba);
+  vWorldNormal = normalize(vec3(
+    -totalGradient.x,
+    1.0,
+    -totalGradient.y
+  ));
+  vDynamic = vec4(
+    smoothDynamicHeight,
+    dynamicState.gba * dynamicBlend
+  );
   vWaveHeight = baseWave.x + smoothDynamicHeight;
+  gl_Position = projectionMatrix * viewMatrix * worldPosition;
+}
+`
+
+const farOceanVertexShader = `
+uniform float uTime;
+
+varying vec3 vWorldPosition;
+varying vec3 vWorldNormal;
+varying float vWaveHeight;
+
+${sampleBaseWavesFunction}
+
+void main() {
+  vec4 worldPosition = modelMatrix * vec4(position, 1.0);
+  vec3 baseWave = sampleBaseWaves(worldPosition.xz);
+  worldPosition.y += baseWave.x;
+
+  vWorldPosition = worldPosition.xyz;
+  vWorldNormal = normalize(vec3(
+    -baseWave.y,
+    1.0,
+    -baseWave.z
+  ));
+  vWaveHeight = baseWave.x;
   gl_Position = projectionMatrix * viewMatrix * worldPosition;
 }
 `
@@ -194,6 +233,51 @@ void main() {
 }
 `
 
+const farOceanFragmentShader = `
+uniform vec3 uDeepColor;
+uniform vec3 uSurfaceColor;
+uniform vec3 uSkyColor;
+uniform vec3 uSunDirection;
+
+varying vec3 vWorldPosition;
+varying vec3 vWorldNormal;
+varying float vWaveHeight;
+
+void main() {
+  vec3 normal = normalize(vWorldNormal);
+  vec3 viewDirection = normalize(cameraPosition - vWorldPosition);
+  vec3 lightDirection = normalize(uSunDirection);
+  vec3 halfDirection = normalize(viewDirection + lightDirection);
+
+  float normalDotView = max(0.0, dot(normal, viewDirection));
+  float normalDotLight = max(0.0, dot(normal, lightDirection));
+  float fresnel =
+    0.04 + 0.96 * pow(1.0 - normalDotView, 5.0);
+  float broadGlint =
+    pow(max(0.0, dot(normal, halfDirection)), 34.0) * 0.1;
+  float depression = 1.0 - smoothstep(-1.1, 0.0, vWaveHeight);
+
+  vec3 waterColor = mix(
+    uDeepColor,
+    uSurfaceColor,
+    clamp(
+      normalDotLight * 0.32 + vWaveHeight * 0.06 + 0.24,
+      0.0,
+      1.0
+    )
+  );
+  waterColor *= mix(1.0, 0.62, depression);
+  waterColor = mix(waterColor, uSkyColor, fresnel * 0.48);
+  waterColor += vec3(1.0, 0.88, 0.65) * broadGlint;
+
+  float distanceToCamera = length(cameraPosition - vWorldPosition);
+  float fog = smoothstep(78.0, 155.0, distanceToCamera);
+  waterColor = mix(waterColor, uSkyColor, fog * 0.68);
+
+  gl_FragColor = vec4(min(waterColor, vec3(1.35)), 1.0);
+}
+`
+
 export function createOceanMaterial(
   dynamicTexture: THREE.Texture,
   resolution: number,
@@ -213,6 +297,27 @@ export function createOceanMaterial(
       uDeepColor: { value: new THREE.Color('#031c2a') },
       uSurfaceColor: { value: new THREE.Color('#08758d') },
       uFoamColor: { value: new THREE.Color('#d7f8f5') },
+      uSkyColor: { value: new THREE.Color('#567b88') },
+      uSunDirection: {
+        value: new THREE.Vector3(0.45, 0.8, 0.3).normalize(),
+      },
+    },
+  })
+}
+
+/**
+ * Analytic-only ocean material for the far skirt. It shares broad-wave and
+ * lighting code with the near ocean but performs no simulation texture reads.
+ */
+export function createFarOceanMaterial(): THREE.ShaderMaterial {
+  return new THREE.ShaderMaterial({
+    vertexShader: farOceanVertexShader,
+    fragmentShader: farOceanFragmentShader,
+    side: THREE.FrontSide,
+    uniforms: {
+      uTime: { value: 0 },
+      uDeepColor: { value: new THREE.Color('#031c2a') },
+      uSurfaceColor: { value: new THREE.Color('#08758d') },
       uSkyColor: { value: new THREE.Color('#567b88') },
       uSunDirection: {
         value: new THREE.Vector3(0.45, 0.8, 0.3).normalize(),

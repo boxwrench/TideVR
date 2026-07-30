@@ -6,6 +6,7 @@ const DEFAULT_FALLBACK_DISTANCE = 12
 const DEFAULT_SAMPLE_STEP = 0.5
 const DEFAULT_WATER_MARGIN = 1
 const SURFACE_OFFSET = 0.08
+export const WATER_AIM_UPDATE_RATE = 30
 
 export interface WaterAimOptions {
   readonly maxDistance?: number
@@ -23,9 +24,64 @@ export type WaterHeightSampler = (
 
 export type WaterAimSource = WaterSampler | WaterHeightSampler
 
+export interface WaterAimThrottleState {
+  readonly initialized: boolean
+  readonly accumulator: number
+}
+
+export interface WaterAimThrottleStep {
+  readonly state: WaterAimThrottleState
+  readonly shouldUpdate: boolean
+}
+
 const samplePoint = new THREE.Vector3()
 const rayDirection = new THREE.Vector3()
 const horizontalDirection = new THREE.Vector3()
+
+export function createWaterAimThrottleState(): WaterAimThrottleState {
+  return { initialized: false, accumulator: 0 }
+}
+
+/**
+ * Schedules at most one water ray-march per render frame while maintaining a
+ * 30 Hz average. The first frame updates immediately and hitches do not cause
+ * a burst of catch-up ray-marches.
+ */
+export function stepWaterAimThrottle(
+  current: WaterAimThrottleState,
+  deltaTime: number,
+  updateRate = WATER_AIM_UPDATE_RATE,
+): WaterAimThrottleStep {
+  const safeUpdateRate =
+    Number.isFinite(updateRate) && updateRate > 0
+      ? updateRate
+      : WATER_AIM_UPDATE_RATE
+
+  if (!current.initialized) {
+    return {
+      state: { initialized: true, accumulator: 0 },
+      shouldUpdate: true,
+    }
+  }
+
+  const interval = 1 / safeUpdateRate
+  const accumulator =
+    current.accumulator + Math.max(0, deltaTime)
+  if (accumulator < interval) {
+    return {
+      state: { initialized: true, accumulator },
+      shouldUpdate: false,
+    }
+  }
+
+  return {
+    state: {
+      initialized: true,
+      accumulator: accumulator % interval,
+    },
+    shouldUpdate: true,
+  }
+}
 
 function getWaterHeight(
   source: WaterAimSource,

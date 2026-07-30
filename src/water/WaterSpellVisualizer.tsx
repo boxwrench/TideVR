@@ -6,6 +6,7 @@ import type {
   WaterCommand,
   WaterCommandBus,
 } from '../game/WaterCommandBus'
+import { findSwellCue, type SwellCue } from './swellCue'
 import type { WaterSampler } from './types'
 
 interface WaterSpellVisualizerProps {
@@ -18,6 +19,8 @@ type VisibleSpellCommand = Exclude<WaterCommand, { readonly kind: 'wake' }>
 interface ActiveEffect {
   readonly command: VisibleSpellCommand
   readonly startedAt: number
+  lastSwellCueAt?: number
+  swellCue?: SwellCue | null
 }
 
 interface ActiveWake {
@@ -26,6 +29,8 @@ interface ActiveWake {
 }
 
 const MAX_EFFECTS = 40
+const MAX_SWELL_EFFECTS = 12
+const SWELL_CUE_INTERVAL = 1 / 30
 const MAX_WAKE_SEGMENTS = 72
 const WAKE_LIFETIME = 5.5
 const EFFECT_LIFETIME = {
@@ -102,22 +107,48 @@ export function WaterSpellVisualizer({
 
     let instance = 0
     for (const effect of effects.current) {
-      if (effect.command.kind !== kind || instance >= MAX_EFFECTS) continue
+      const instanceLimit = kind === 'swell' ? MAX_SWELL_EFFECTS : MAX_EFFECTS
+      if (effect.command.kind !== kind || instance >= instanceLimit) continue
 
       const { command } = effect
       const age = now - effect.startedAt
       const life = EFFECT_LIFETIME[kind]
       const remainingScale = THREE.MathUtils.clamp((life - age) * 2.5, 0, 1)
-      const travel =
-        kind === 'swell' ? age * (2.4 + command.strength * 2.8) : 0
-      const x = command.position.x + command.direction.x * travel
-      const z = command.position.z + command.direction.z * travel
-      const surface = water.sample(x, z, now)
+      let x = command.position.x
+      let z = command.position.z
+      let surfaceHeight: number
+      let swellConfidence = 0
+      if (command.kind === 'swell') {
+        if (
+          effect.lastSwellCueAt === undefined ||
+          now - effect.lastSwellCueAt >= SWELL_CUE_INTERVAL
+        ) {
+          effect.swellCue = findSwellCue(command, water, now)
+          effect.lastSwellCueAt = now
+        }
+        const swellCue = effect.swellCue
+        if (swellCue === null) continue
+        if (swellCue === undefined) continue
+        x = swellCue.x
+        z = swellCue.z
+        surfaceHeight = swellCue.height
+        swellConfidence = swellCue.confidence
+      } else {
+        surfaceHeight = water.sample(x, z, now).height
+      }
 
-      dummy.position.set(x, surface.height + 0.09, z)
+      dummy.position.set(x, surfaceHeight + 0.09, z)
       dummy.rotation.set(0, 0, 0)
 
-      if (kind === 'current') {
+      if (command.kind === 'swell') {
+        const confidence = 0.35 + swellConfidence * 0.65
+        dummy.rotation.y = Math.atan2(command.direction.x, command.direction.z)
+        dummy.scale.set(
+          command.radius * 1.2 * remainingScale * confidence,
+          remainingScale,
+          (0.2 + command.strength * 0.22) * remainingScale * confidence,
+        )
+      } else if (command.kind === 'current') {
         dummy.rotation.y = Math.atan2(
           command.direction.x,
           command.direction.z,
@@ -128,10 +159,7 @@ export function WaterSpellVisualizer({
           remainingScale * Math.max(1, command.radius * 0.82),
         )
       } else {
-        const pulse =
-          kind === 'swell'
-            ? command.radius * (0.58 + age * 0.16)
-            : command.radius * (0.72 + Math.sin(age * 5) * 0.035)
+        const pulse = command.radius * (0.72 + Math.sin(age * 5) * 0.035)
         dummy.rotation.x = -Math.PI / 2
         dummy.scale.setScalar(pulse * remainingScale)
       }
@@ -207,7 +235,7 @@ export function WaterSpellVisualizer({
         frustumCulled={false}
         renderOrder={30}
       >
-        <ringGeometry args={[0.86, 1, 48]} />
+        <boxGeometry args={[1, 0.025, 1]} />
         <meshBasicMaterial
           color="#73e6ff"
           transparent

@@ -95,6 +95,27 @@ export class CoarseWaterField implements WaterSampler {
     return Math.max(0, Math.min(this.resolution - 1, value))
   }
 
+  private sampleGridChannel(
+    gridX: number,
+    gridZ: number,
+    channel: number,
+  ): number {
+    const clampedX = Math.max(0, Math.min(this.resolution - 1, gridX))
+    const clampedZ = Math.max(0, Math.min(this.resolution - 1, gridZ))
+    const x0 = Math.floor(clampedX)
+    const z0 = Math.floor(clampedZ)
+    const x1 = Math.min(this.resolution - 1, x0 + 1)
+    const z1 = Math.min(this.resolution - 1, z0 + 1)
+    const blendX = clampedX - x0
+    const blendZ = clampedZ - z0
+    const lower = this.state[this.offset(x0, z0, channel)] * (1 - blendX) +
+      this.state[this.offset(x1, z0, channel)] * blendX
+    const upper = this.state[this.offset(x0, z1, channel)] * (1 - blendX) +
+      this.state[this.offset(x1, z1, channel)] * blendX
+
+    return lower * (1 - blendZ) + upper * blendZ
+  }
+
   private step(deltaTime: number): void {
     const last = this.resolution - 1
     const pressure = 6.5
@@ -129,11 +150,32 @@ export class CoarseWaterField implements WaterSampler {
           (velocityRight - velocityLeft + velocityUp - velocityDown) /
           (2 * this.cellSize)
 
+        // Transport flow and foam with the existing flow before applying the
+        // pressure update. Height stays on the stable shallow-water solver.
+        const localVelocityX = this.state[index + VELOCITY_X]
+        const localVelocityZ = this.state[index + VELOCITY_Z]
+        const backtraceX = x - (localVelocityX * deltaTime) / this.cellSize
+        const backtraceZ = z - (localVelocityZ * deltaTime) / this.cellSize
+        const advectedVelocityX = this.sampleGridChannel(
+          backtraceX,
+          backtraceZ,
+          VELOCITY_X,
+        )
+        const advectedVelocityZ = this.sampleGridChannel(
+          backtraceX,
+          backtraceZ,
+          VELOCITY_Z,
+        )
+        const advectedFoam = this.sampleGridChannel(
+          backtraceX,
+          backtraceZ,
+          FOAM,
+        )
         const velocityX =
-          (this.state[index + VELOCITY_X] - pressure * gradientX * deltaTime) *
+          (advectedVelocityX - pressure * gradientX * deltaTime) *
           velocityDamping
         const velocityZ =
-          (this.state[index + VELOCITY_Z] - pressure * gradientZ * deltaTime) *
+          (advectedVelocityZ - pressure * gradientZ * deltaTime) *
           velocityDamping
         const transportedHeight =
           this.state[index + HEIGHT] - depth * divergence * deltaTime
@@ -143,7 +185,7 @@ export class CoarseWaterField implements WaterSampler {
           heightDamping
         const slopeEnergy = Math.hypot(gradientX, gradientZ)
         const foam = Math.max(
-          this.state[index + FOAM] * foamDamping,
+          advectedFoam * foamDamping,
           Math.min(1, slopeEnergy * 2.2 + Math.abs(divergence) * 0.4),
         )
 

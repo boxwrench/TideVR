@@ -21,6 +21,7 @@ import { PerformanceHud } from './ui/PerformanceHud'
 import { CoarseWaterField } from './water/CoarseWaterField'
 import { OceanSurface } from './water/OceanSurface'
 import { WaterSpellVisualizer } from './water/WaterSpellVisualizer'
+import { resolveWaterRenderQuality } from './water/waterRenderQuality'
 import { updateCastingKeys } from './xr/inputState'
 import { xrStore } from './xr/store'
 import { XRPerformanceMonitor } from './xr/XRPerformanceMonitor'
@@ -45,6 +46,13 @@ export function App() {
   const isCasting = desktopCasting || vrCasting
 
   const commandBus = useMemo(() => new WaterCommandBus(), [])
+  const waterQuality = useMemo(
+    () =>
+      resolveWaterRenderQuality(
+        new URLSearchParams(window.location.search).get('waterQuality'),
+      ),
+    [],
+  )
   const gameplayField = useMemo(
     () =>
       new CoarseWaterField({
@@ -203,6 +211,7 @@ export function App() {
           <OceanSurface
             commandBus={commandBus}
             gameplayField={gameplayField}
+            quality={waterQuality}
           />
           <WaterSpellVisualizer
             commandBus={commandBus}

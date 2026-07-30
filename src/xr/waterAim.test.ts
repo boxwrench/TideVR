@@ -1,7 +1,12 @@
 import * as THREE from 'three'
 import { describe, expect, it, vi } from 'vitest'
 import type { WaterSample, WaterSampler } from '../water/types'
-import { resolveWaterAim } from './waterAim'
+import {
+  WATER_AIM_UPDATE_RATE,
+  createWaterAimThrottleState,
+  resolveWaterAim,
+  stepWaterAimThrottle,
+} from './waterAim'
 
 const levelWater = () => 0
 
@@ -104,5 +109,79 @@ describe('water-aware ability aiming', () => {
     expect(target.x).toBe(4)
     expect(target.z).toBe(0)
     expect(sampleHeight).toHaveBeenLastCalledWith(4, 0, 0)
+  })
+})
+
+describe('water-aim update throttle', () => {
+  it('updates immediately, then waits for the 30 Hz interval', () => {
+    const first = stepWaterAimThrottle(
+      createWaterAimThrottleState(),
+      1 / 72,
+    )
+    expect(first.shouldUpdate).toBe(true)
+
+    const second = stepWaterAimThrottle(first.state, 1 / 72)
+    expect(second.shouldUpdate).toBe(false)
+
+    const third = stepWaterAimThrottle(second.state, 1 / 72)
+    expect(third.shouldUpdate).toBe(false)
+
+    const fourth = stepWaterAimThrottle(third.state, 1 / 72)
+    expect(fourth.shouldUpdate).toBe(true)
+  })
+
+  it.each([72, 80, 90, 120])(
+    'averages 30 updates over one second at %i Hz',
+    (renderRate) => {
+      let state = createWaterAimThrottleState()
+      let updates = 0
+
+      for (let frame = 0; frame < renderRate; frame += 1) {
+        const step = stepWaterAimThrottle(
+          state,
+          1 / renderRate,
+        )
+        state = step.state
+        if (step.shouldUpdate) updates += 1
+      }
+
+      expect(updates).toBe(WATER_AIM_UPDATE_RATE)
+    },
+  )
+
+  it('collapses a hitch to one update and preserves the remainder', () => {
+    const initialized = stepWaterAimThrottle(
+      createWaterAimThrottleState(),
+      0,
+    )
+    const hitched = stepWaterAimThrottle(
+      initialized.state,
+      0.105,
+    )
+
+    expect(hitched.shouldUpdate).toBe(true)
+    expect(hitched.state.accumulator).toBeCloseTo(0.005)
+  })
+
+  it('ignores negative deltas and falls back from an invalid rate', () => {
+    const initialized = stepWaterAimThrottle(
+      createWaterAimThrottleState(),
+      0,
+    )
+    const negative = stepWaterAimThrottle(
+      initialized.state,
+      -1,
+    )
+    expect(negative).toEqual({
+      state: { initialized: true, accumulator: 0 },
+      shouldUpdate: false,
+    })
+
+    const fallback = stepWaterAimThrottle(
+      negative.state,
+      1 / WATER_AIM_UPDATE_RATE,
+      0,
+    )
+    expect(fallback.shouldUpdate).toBe(true)
   })
 })

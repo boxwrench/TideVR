@@ -31,6 +31,12 @@ void main() {
   vec4 right = texture2D(uCurrentState, vUv + vec2(texel.x, 0.0));
   vec4 top = texture2D(uCurrentState, vUv + vec2(0.0, texel.y));
   vec4 bottom = texture2D(uCurrentState, vUv - vec2(0.0, texel.y));
+  vec2 backtraceUv = clamp(
+    vUv - vec2(current.g, -current.b) * (uDeltaTime / uWorldSize),
+    texel * 0.5,
+    vec2(1.0) - texel * 0.5
+  );
+  vec4 advected = texture2D(uCurrentState, backtraceUv);
 
   float cellSize = uWorldSize / max(uResolution.x - 1.0, 1.0);
   vec2 heightGradient = vec2(
@@ -45,9 +51,9 @@ void main() {
   float neighborHeight = (left.r + right.r + top.r + bottom.r) * 0.25;
   float height = current.r - divergence * 0.8 * uDeltaTime;
   height = mix(height, neighborHeight, 0.035);
-  vec2 velocity = current.gb - heightGradient * 6.5 * uDeltaTime;
+  vec2 velocity = advected.gb - heightGradient * 6.5 * uDeltaTime;
   float foam = max(
-    current.a * exp(-0.52 * uDeltaTime),
+    advected.a * exp(-0.52 * uDeltaTime),
     clamp(length(heightGradient) * 2.2 + abs(divergence) * 0.4, 0.0, 1.0)
   );
 

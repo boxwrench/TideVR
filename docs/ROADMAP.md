@@ -1,5 +1,22 @@
 # TideVR roadmap
 
+## Current plateau
+
+The water-truth pass is complete:
+
+- Swell feedback is attached to the crest sampled from gameplay water.
+- Horizontal water forces are contact-dependent and use relative Current
+  velocity.
+- Velocity and foam advect in the CPU and GPU fields.
+- The dynamic near ocean blends into an analytic 900-meter horizon skirt.
+- Water aiming and Swell cue searches run at 30 Hz.
+- Render-only low, medium, and high ocean quality tiers are available without
+  changing gameplay simulation resolution.
+
+The next priority is Quest 3 profiling followed by carving spray, landing
+splash, and continuous wake presentation. The controller should be decomposed
+further before adding the Storm Run game-state systems.
+
 ## 1. Riding foundation
 
 - Flat/open ocean and chase camera.

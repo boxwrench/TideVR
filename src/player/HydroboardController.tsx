@@ -14,6 +14,7 @@ import type {
   HydroboardContactState,
   HydroboardTelemetry,
 } from './hydroboardTelemetry'
+import { calculateHydroboardWaterAcceleration } from './hydroboardPhysics'
 import { getXrChaseYaw } from '../xr/chaseCamera'
 import {
   createMovementKeyState,
@@ -28,7 +29,11 @@ import {
   rebaseLoopCoordinate,
   stepLoopTransition,
 } from '../xr/loopTransition'
-import { resolveWaterAim } from '../xr/waterAim'
+import {
+  createWaterAimThrottleState,
+  resolveWaterAim,
+  stepWaterAimThrottle,
+} from '../xr/waterAim'
 
 interface HydroboardControllerProps {
   readonly activeAbility: WaterAbility
@@ -112,6 +117,7 @@ export function HydroboardController({
   const lastTelemetryTime = useRef(0)
   const aimTarget = useRef(new THREE.Vector3(0, 0, -34))
   const aimDirection = useRef(new THREE.Vector2(0, 1))
+  const waterAimThrottle = useRef(createWaterAimThrottleState())
 
   const keys = useRef(createMovementKeyState())
 
@@ -143,7 +149,6 @@ export function HydroboardController({
   const scratch = useRef({
     moveDirection: new THREE.Vector3(),
     rightDirection: new THREE.Vector3(),
-    currentVelocity: new THREE.Vector3(),
     cameraOffset: new THREE.Vector3(),
     cameraTarget: new THREE.Vector3(),
     rayOrigin: new THREE.Vector3(),
@@ -258,24 +263,17 @@ export function HydroboardController({
       moveDirection,
       throttleInput * (boostInput ? 15.5 : 11.5) * deltaTime,
     )
-    velocity.current.x +=
-      (forceSample.normal.x / Math.max(0.3, forceSample.normal.y)) *
-      4.2 *
-      deltaTime
-    velocity.current.z +=
-      (forceSample.normal.z / Math.max(0.3, forceSample.normal.y)) *
-      4.2 *
-      deltaTime
-
-    scratch.current.currentVelocity.set(
-      forceSample.velocity.x,
-      0,
-      forceSample.velocity.z,
-    )
-    velocity.current.addScaledVector(
-      scratch.current.currentVelocity,
-      1.55 * deltaTime,
-    )
+    const waterAcceleration = calculateHydroboardWaterAcceleration({
+      boardVelocity: {
+        x: velocity.current.x,
+        z: velocity.current.z,
+      },
+      waterVelocity: forceSample.velocity,
+      surfaceNormal: forceSample.normal,
+      contactState: contactState.current,
+    })
+    velocity.current.x += waterAcceleration.x * deltaTime
+    velocity.current.z += waterAcceleration.z * deltaTime
 
     const lateralSpeed = velocity.current.dot(rightDirection)
     velocity.current.addScaledVector(
@@ -487,13 +485,20 @@ export function HydroboardController({
         (1 - Math.exp(-10 * deltaTime))
     }
 
-    updateAimTarget(
-      session !== undefined,
-      rightController?.object,
-      moveDirection,
-      water,
-      time,
+    const aimStep = stepWaterAimThrottle(
+      waterAimThrottle.current,
+      deltaTime,
     )
+    waterAimThrottle.current = aimStep.state
+    if (aimStep.shouldUpdate) {
+      updateAimTarget(
+        session !== undefined,
+        rightController?.object,
+        moveDirection,
+        water,
+        time,
+      )
+    }
 
     const aimDistance = scratch.current.rayOrigin.distanceTo(
       aimTarget.current,

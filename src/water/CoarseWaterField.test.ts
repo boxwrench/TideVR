@@ -48,6 +48,27 @@ describe('coarse gameplay water', () => {
     expect(sample.turbulence).toBeGreaterThan(0)
   })
 
+  it('advects Current energy downstream instead of decaying in place', () => {
+    const field = new CoarseWaterField({
+      resolution: 81,
+      worldSize: 40,
+      updateRate: 30,
+    })
+    field.enqueue([
+      command('current', {
+        radius: 3,
+        direction: { x: 1, z: 0 },
+      }),
+    ])
+
+    for (let step = 0; step < 24; step++) field.update(1 / 30)
+
+    const downstream = field.sample(3.2, 0, 0.8)
+    const upstream = field.sample(-3.2, 0, 0.8)
+    expect(downstream.velocity.x).toBeGreaterThan(upstream.velocity.x)
+    expect(downstream.turbulence).toBeGreaterThan(upstream.turbulence)
+  })
+
   it('gives a painted Current a raised bank beside its flow channel', () => {
     const field = new CoarseWaterField({
       resolution: 65,

@@ -37,9 +37,15 @@ surfable instead of accumulating narrow spikes.
 
 The rendered surface separates scales: broad analytic swells and smoothed
 dynamic deformation move vertices, while short procedural ripples affect only
-the fragment normal and fade with distance. Spell feedback is a separate,
-bounded instanced layer, so casts remain readable even when the simulation
-itself is visually subtle.
+the fragment normal and fade with distance. Swell feedback samples the coarse
+field for the strongest forward-moving crest instead of advancing on an
+independent visual clock. Current, Vortex, and wake feedback remains a
+separate bounded instanced layer.
+
+Velocity and foam use a clamped semi-Lagrangian backtrace in both fields.
+Height remains on the stable divergence/pressure update. This lets foam and
+flow move through the domain without replacing the inexpensive shallow-water
+model with a full fluid solver.
 
 While water-contact is active, the hydroboard emits short wake commands along
 its path. Each command cuts a shallow center trough, raises two side rails, and
@@ -60,9 +66,14 @@ flat lighting.
 - `src/water/CoarseWaterField.ts` owns gameplay state, finite-difference
   stepping, and water sampling.
 - `src/water/OceanSurface.tsx` fans commands into both simulations and binds
-  the current GPU texture to rendering.
+  the current GPU texture to the 180-meter near ocean. It also owns the
+  analytic 900-meter far-ocean skirt and render-only quality tier.
 - `src/water/WaterSpellVisualizer.tsx` renders lightweight transient signatures
-  for Swell, Current, and Vortex without changing gameplay state.
+  for Swell, Current, and Vortex without changing gameplay state. Swell cue
+  searches are capped and updated at the gameplay field's 30 Hz cadence.
+- `src/player/hydroboardPhysics.ts` owns deterministic contact-dependent
+  horizontal water coupling. Airborne coupling is zero, landing coupling is
+  reduced, and Current acceleration is based on relative water velocity.
 - `src/player/HydroboardController.tsx` maps XR/desktop input into board forces
   and water commands. It depends only on the `WaterSampler` interface. A
   ray-marched aim helper finds the first moving-water crossing instead of
@@ -88,11 +99,12 @@ The initial fields use a damped shallow-water approximation:
 
 1. Height gradients accelerate horizontal velocity.
 2. Velocity divergence changes height.
-3. Height and velocity decay prevents permanent effects.
-4. Strong gradients and spell stamps add foam.
+3. A semi-Lagrangian backtrace transports velocity and foam.
+4. Height and velocity decay prevents permanent effects.
+5. Strong gradients and spell stamps add foam.
 
-This is a foundation for feel testing, not a final ocean model. Tune the CPU
-and GPU solvers independently for perceptual agreement; they do not need
+This is a foundation for feel testing, not a final ocean model. CPU and GPU
+fields share command semantics and transport direction, but they do not need
 texel-perfect identity.
 
 ## Domain recentering
@@ -114,7 +126,10 @@ and does not destroy permanent player-authored terrain.
 
 - 512² dynamic GPU field at 30 Hz, not every display frame.
 - 64² CPU field at 30 Hz.
-- A roughly 37k-vertex ocean patch with vertex displacement.
+- A 180 m simulated near patch plus a 900 m analytic far-ocean skirt.
+- Render-only water tiers leave both simulation fields unchanged:
+  `low` = 96 near segments / 12 m far spacing, `medium` = 144 / 8 m,
+  and `high` = 192 / 6 m. `medium` is the default.
 - Device pixel ratio capped at 1.25.
 - Native XR foveation requested while presenting.
 - No GPU readback, reflection pass, transparent ocean, or post-processing.

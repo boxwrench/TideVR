@@ -22,13 +22,18 @@ The first runnable foundation includes:
 - A 512² RGBA16F GPU water simulation fixed at 30 Hz.
 - A separate 64² CPU gameplay field; board physics never reads the GPU.
 - Swell, Current, Vortex, and continuous hydroboard wake commands sent to both
-  fields, with bounded deformation and distinct transient cast visuals.
+  fields, with bounded deformation and Swell feedback sampled from the actual
+  rideable crest.
+- Semi-Lagrangian velocity and foam transport in both fields, while height
+  remains on the stable shallow-water pressure solver.
 - A carved wake trough with raised foam rails that follows and records the
   rider's turns for several seconds.
-- A lightweight buoy route, horizon atmosphere, foam, Fresnel, and sun glints.
+- A 180-meter dynamic near ocean blended into a 900-meter analytic horizon
+  skirt, plus a lightweight buoy route, foam, Fresnel, and sun glints.
 - XR-safe offscreen compute passes that preserve the headset framebuffer.
 - Right-controller-origin moving-water aiming, a visible range guide with
-  meter readout, masked course rebasing, and corrected XR chase orientation.
+  meter readout, 30 Hz aim sampling, masked course rebasing, and corrected XR
+  chase orientation.
 - In-headset ability/status UI, optional native XR diagnostics, procedural
   wind/water audio, and tested input lifecycle handling.
 
@@ -52,6 +57,8 @@ Vortex fires on press.
 
 ## Run locally
 
+Use Node.js 22, matching CI and the version pinned in `.nvmrc`.
+
 ```bash
 npm ci
 npm run dev
@@ -61,6 +68,8 @@ Open `http://localhost:5175/TideVR/`. The development build installs the WebXR
 emulator only when requested with
 `http://localhost:5175/TideVR/?emulate=1`, so it cannot replace a connected
 native headset. Add `&dev=1` for in-headset performance diagnostics.
+Choose render-only ocean detail with `&waterQuality=low`, `medium`, or `high`;
+the default is `medium`.
 
 ## Play online
 
@@ -99,4 +108,8 @@ docs/
 ```
 
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for system boundaries and
-[docs/GAMEPLAY.md](docs/GAMEPLAY.md) for the design brief.
+[docs/GAMEPLAY.md](docs/GAMEPLAY.md) for the design brief. Quest profiling,
+deployment, and current milestones are documented in
+[docs/DEVICE_TESTING.md](docs/DEVICE_TESTING.md),
+[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md), and
+[docs/ROADMAP.md](docs/ROADMAP.md).

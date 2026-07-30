@@ -1,6 +1,7 @@
 # Deployment
 
 The production build uses `/TideVR/` as its asset base for GitHub Pages.
+Development and CI support Node.js 22, pinned in `.nvmrc` and `package.json`.
 
 ```bash
 npm ci
