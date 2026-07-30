@@ -1,0 +1,294 @@
+:root {
+  color: #e9fbff;
+  background: #06131f;
+  font-family:
+    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    sans-serif;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  --panel: rgba(3, 18, 30, 0.76);
+  --panel-border: rgba(170, 242, 255, 0.2);
+  --muted: #9bc3cf;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+}
+
+button {
+  font: inherit;
+}
+
+.app-shell {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+  background: #06131f;
+}
+
+.app-shell canvas {
+  display: block;
+  touch-action: none;
+}
+
+.overlay-panel {
+  position: absolute;
+  z-index: 10;
+  border: 1px solid var(--panel-border);
+  border-radius: 14px;
+  background: var(--panel);
+  box-shadow: 0 14px 50px rgba(0, 4, 10, 0.28);
+  backdrop-filter: blur(14px);
+}
+
+.intro-panel {
+  top: 18px;
+  left: 18px;
+  width: min(370px, calc(100vw - 36px));
+  padding: 18px;
+}
+
+.eyebrow {
+  margin: 0 0 4px;
+  color: #70e5fb;
+  font-size: 0.68rem;
+  font-weight: 750;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.intro-panel h1 {
+  margin: 0;
+  color: #f0fdff;
+  font-size: clamp(2rem, 4vw, 3.2rem);
+  font-weight: 780;
+  letter-spacing: -0.055em;
+  line-height: 0.96;
+  text-shadow: 0 0 28px rgba(89, 228, 255, 0.24);
+}
+
+.tagline {
+  margin: 7px 0 13px;
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.control-summary {
+  display: grid;
+  gap: 4px;
+  color: #b7d5dc;
+  font-size: 0.72rem;
+}
+
+.control-summary b {
+  display: inline-block;
+  width: 88px;
+  color: #f0fdff;
+}
+
+.enter-vr-button {
+  width: 100%;
+  margin-top: 14px;
+  padding: 10px 14px;
+  border: 1px solid rgba(130, 239, 255, 0.45);
+  border-radius: 9px;
+  color: #03151d;
+  background: linear-gradient(135deg, #89f1ff, #55d6bd);
+  cursor: pointer;
+  font-weight: 780;
+  transition:
+    transform 140ms ease,
+    filter 140ms ease;
+}
+
+.enter-vr-button:hover {
+  filter: brightness(1.08);
+  transform: translateY(-1px);
+}
+
+.entry-error {
+  margin: 8px 0 0;
+  color: #ffb7ad;
+  font-size: 0.75rem;
+}
+
+.active-ability-card {
+  top: 18px;
+  right: 18px;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  min-width: 190px;
+  padding: 11px 13px;
+}
+
+.ability-orb {
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  box-shadow: 0 0 18px currentColor;
+}
+
+.active-ability-card[data-casting="true"] .ability-orb {
+  animation: casting-pulse 600ms ease-in-out infinite alternate;
+}
+
+@keyframes casting-pulse {
+  to {
+    transform: scale(1.35);
+    filter: brightness(1.4);
+  }
+}
+
+.active-ability-card div {
+  display: flex;
+  flex-direction: column;
+}
+
+.active-ability-card small {
+  color: var(--muted);
+  font-size: 0.66rem;
+}
+
+.active-ability-card strong {
+  font-size: 0.8rem;
+}
+
+.ability-bar {
+  bottom: 20px;
+  left: 50%;
+  display: flex;
+  gap: 8px;
+  padding: 8px;
+  transform: translateX(-50%);
+}
+
+.ability-button {
+  --ability-color: #76eaff;
+  display: flex;
+  min-width: 170px;
+  gap: 9px;
+  align-items: center;
+  padding: 9px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 9px;
+  color: #c5e0e7;
+  background: rgba(255, 255, 255, 0.035);
+  cursor: pointer;
+  text-align: left;
+  transition:
+    background 140ms ease,
+    border-color 140ms ease,
+    transform 140ms ease;
+}
+
+.ability-button:hover {
+  background: rgba(255, 255, 255, 0.075);
+  transform: translateY(-1px);
+}
+
+.ability-button.active {
+  border-color: var(--ability-color);
+  color: #fff;
+  background: color-mix(in srgb, var(--ability-color) 14%, transparent);
+  box-shadow: inset 0 0 18px rgba(255, 255, 255, 0.04);
+}
+
+.ability-key {
+  display: grid;
+  width: 27px;
+  height: 27px;
+  place-items: center;
+  flex: 0 0 auto;
+  border: 1px solid var(--ability-color);
+  border-radius: 7px;
+  color: var(--ability-color);
+  background: rgba(0, 0, 0, 0.25);
+  font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.ability-copy {
+  display: flex;
+  flex-direction: column;
+}
+
+.ability-copy strong {
+  font-size: 0.82rem;
+}
+
+.ability-copy small {
+  color: var(--muted);
+  font-size: 0.64rem;
+  white-space: nowrap;
+}
+
+.performance-hud {
+  top: 76px;
+  right: 18px;
+  display: grid;
+  width: 190px;
+  gap: 5px;
+  padding: 11px 13px;
+  font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
+  font-size: 0.68rem;
+}
+
+.performance-hud div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.performance-hud span {
+  color: var(--muted);
+}
+
+.performance-hud .healthy {
+  color: #67f2ad;
+}
+
+.performance-hud .warning {
+  color: #ffd36c;
+}
+
+.performance-hud .slow {
+  color: #ff8278;
+}
+
+@media (max-width: 720px) {
+  .intro-panel {
+    padding: 14px;
+  }
+
+  .control-summary,
+  .active-ability-card {
+    display: none;
+  }
+
+  .ability-bar {
+    width: calc(100vw - 20px);
+    gap: 5px;
+  }
+
+  .ability-button {
+    min-width: 0;
+    flex: 1;
+    justify-content: center;
+    padding: 9px 6px;
+  }
+
+  .ability-copy small {
+    display: none;
+  }
+}
